@@ -1,3 +1,3 @@
-module removeDuplicate
+module github.com/guigax/removeDuplicate
 
-go 1.18
+go 1.20

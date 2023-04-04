@@ -4,78 +4,59 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-func unique(stringSlice []string, remove bool) []string {
-	list := []string{}
-	for _, entry := range stringSlice {
-		if Index(list, entry) == -1 {
-			list = append(list, entry)
-		} else if remove {
-			list = Remove(list, Index(list, entry))
-		}
-	}
-	return list
-}
-
-func Remove(s []string, i int) []string {
-	s[i] = s[len(s)-1]
-	return s[:len(s)-1]
-}
-
-func Index(vs []string, t string) int {
-	for i, v := range vs {
-		if v == t {
-			return i
-		}
-	}
-	return -1
-}
-
-func saveLines(filePath string, values []string) error {
-	f, err := os.Create(filePath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	for _, value := range values {
-		fmt.Fprintln(f, value) // print values to f, one per line
-	}
-	return nil
-}
-
 func main() {
-	var (
-		filename  = flag.String("filename", "", "file that will be parsed")
-		removeAll = flag.Bool("removeAll", false, "if true, it will remove all the duplicate occurrences")
-	)
+	filename := flag.String("file", "example.txt", "file that will be parsed")
 	flag.Parse()
 
-	f, err := os.Open(*filename)
+	file, err := os.Open(*filename)
 	if err != nil {
-		log.Fatalf("Problem reading %v: %v\n", *filename, err)
+		fmt.Fprintf(os.Stderr, "Error opening file: %v\n", err)
+		os.Exit(1)
 	}
+	defer file.Close()
 
-	var lines []string
-	scanner := bufio.NewScanner(f)
+	lines := make(map[string]bool)
+
+	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-	if scanner.Err() != nil {
-		fmt.Fprintf(os.Stderr, "Cannot parse data from %v: %v\n", *filename, err)
-	}
+		line := scanner.Text()
+		if !lines[line] {
+			lines[line] = true
+		}
 
-	uniqueLines := unique(lines, *removeAll)
-
-	newFilename := strings.TrimSuffix(*filename, filepath.Ext(*filename)) + "_new" + filepath.Ext(*filename)
-	e := saveLines(newFilename, uniqueLines)
-	if e != nil {
-		log.Fatalf("Problem saving %v: %v\n", *filename, err)
 	}
 
-	f.Close()
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error scanning file: %v\n", err)
+		os.Exit(1)
+	}
+	// Get the directory and base name of the input file.
+	dir := filepath.Dir(*filename)
+	base := filepath.Base(*filename)
+
+	// Append "_new" to the base name to get the output file name.
+	ext := filepath.Ext(base)
+	name := strings.TrimSuffix(base, ext) + "_new" + ext
+	outputPath := filepath.Join(dir, name)
+
+	// Create the output file and write the lines to it.
+	outputFile, err := os.Create(outputPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating output file: %v\n", err)
+		os.Exit(1)
+	}
+	defer outputFile.Close()
+
+	writer := bufio.NewWriter(outputFile)
+	for line := range lines {
+		fmt.Fprintln(writer, line)
+	}
+	writer.Flush()
+
+	fmt.Printf("Duplicate lines removed from %s, new file saved as %s\n", *filename, outputPath)
 }
